@@ -9,7 +9,6 @@ import {
 import {
   expressMiddleware
 } from '@apollo/server/express4';
-// Import the authentication middleware that validates the JWT token
 import { authenticateToken } from './services/auth-service.js';
 // Import the GraphQL schema parts (typeDefs and resolvers)
 import { typeDefs, resolvers } from './schemas/index.js';
