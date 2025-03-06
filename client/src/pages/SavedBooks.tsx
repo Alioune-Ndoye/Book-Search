@@ -1,48 +1,43 @@
-import { useState, useEffect } from 'react';
-import { Container, Card, Button, Row, Col } from 'react-bootstrap';
-
-import { getMe, deleteBook } from '../utils/API';
+import { useQuery, useMutation } from '@apollo/client';
+import { QUERY_ME } from '../utils/queries';
+import { REMOVE_BOOK } from '../utils/mutations';
+import { Container, Row, Col, Card, Button } from 'react-bootstrap';  // Ensure you're importing these
 import Auth from '../utils/auth';
 import { removeBookId } from '../utils/localStorage';
-import type { User } from '../models/User';
 
 const SavedBooks = () => {
-  const [userData, setUserData] = useState<User>({
-    username: '',
-    email: '',
-    password: '',
-    savedBooks: [],
+  // Fetch user data with useQuery hook
+  const { data, loading, error } = useQuery(QUERY_ME);
+
+  // Handle book removal with useMutation hook
+  const [removeBook, { error: mutationError }] = useMutation(REMOVE_BOOK, {
+    // Optimistically update the cache when a book is removed
+    update(cache, { data: { removeBook } }) {
+      const { me } = cache.readQuery({ query: QUERY_ME });
+
+      cache.writeQuery({
+        query: QUERY_ME,
+        data: {
+          me: {
+            ...me,
+            savedBooks: me.savedBooks.filter(book => book.bookId !== removeBook.bookId),
+          },
+        },
+      });
+    },
   });
 
-  // use this to determine if `useEffect()` hook needs to run again
-  const userDataLength = Object.keys(userData).length;
+  // Loading state while waiting for data
+  if (loading) {
+    return <h2>Loading...</h2>;
+  }
 
-  useEffect(() => {
-    const getUserData = async () => {
-      try {
-        const token = Auth.loggedIn() ? Auth.getToken() : null;
+  // Error handling for fetching user data
+  if (error) {
+    return <h2>Error: {error.message}</h2>;
+  }
 
-        if (!token) {
-          return false;
-        }
-
-        const response = await getMe(token);
-
-        if (!response.ok) {
-          throw new Error('something went wrong!');
-        }
-
-        const user = await response.json();
-        setUserData(user);
-      } catch (err) {
-        console.error(err);
-      }
-    };
-
-    getUserData();
-  }, [userDataLength]);
-
-  // create function that accepts the book's mongo _id value as param and deletes the book from the database
+  // Function to handle book deletion
   const handleDeleteBook = async (bookId: string) => {
     const token = Auth.loggedIn() ? Auth.getToken() : null;
 
@@ -51,23 +46,17 @@ const SavedBooks = () => {
     }
 
     try {
-      const response = await deleteBook(bookId, token);
+      // Call the mutation to remove the book
+      const { data } = await removeBook({ variables: { bookId } });
 
-      if (!response.ok) {
-        throw new Error('something went wrong!');
-      }
-
-      const updatedUser = await response.json();
-      setUserData(updatedUser);
-      // upon success, remove book's id from localStorage
+      // Remove the book from localStorage
       removeBookId(bookId);
     } catch (err) {
-      console.error(err);
+      console.error('Error deleting book:', err);
     }
   };
-
   // if data isn't here yet, say so
-  if (!userDataLength) {
+  if (loading) {
     return <h2>LOADING...</h2>;
   }
 
@@ -75,11 +64,11 @@ const SavedBooks = () => {
     <>
       <div className='text-light bg-dark p-5'>
         <Container>
-          {userData.username ? (
+           (
             <h1>Viewing {userData.username}'s saved books!</h1>
           ) : (
             <h1>Viewing saved books!</h1>
-          )}
+          )
         </Container>
       </div>
       <Container>
